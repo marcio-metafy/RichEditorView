@@ -34,6 +34,9 @@ import UIKit
     /// Called when custom actions are called by callbacks in the JS
     /// By default, this method is not used unless called by some custom JS that you add
     @objc optional func richEditor(_ editor: RichEditorView, handle action: String)
+    
+    /// Called when cursor moved to different location
+    @objc optional func richEditor(_ editor: RichEditorView, updatedAttributes: [String])
 }
 
 /// RichEditorView is a UIView that displays richly styled text, and allows it to be edited in a WYSIWYG fashion.
@@ -372,6 +375,14 @@ import UIKit
 
         // Handle pre-defined editor actions
         let callbackPrefix = "re-callback://"
+        let editorStateCallBackPrefix = "re-state://"
+        if request.url?.absoluteString.hasPrefix(editorStateCallBackPrefix) == true {
+            let attributesString = request.url?.absoluteString.replacingOccurrences(of: editorStateCallBackPrefix, with: "") ?? ""
+            let attributes = attributesString.split(separator: ",").map { String($0) }
+            delegate?.richEditor?(self, updatedAttributes: attributes)
+            return false
+        }
+        
         if request.url?.absoluteString.hasPrefix(callbackPrefix) == true {
             
             // When we get a callback, we need to fetch the command queue to run the commands
@@ -489,6 +500,9 @@ import UIKit
     /// Called when actions are received from JavaScript
     /// - parameter method: String with the name of the method and optional parameters that were passed in
     private func performCommand(_ method: String) {
+        if method.hasPrefix("pointerup") {
+            runJS("RE.enabledEditingItems();")
+        }
         if method.hasPrefix("ready") {
             // If loading for the first time, we have to set the content HTML to be displayed
             if !isEditorLoaded {
@@ -506,12 +520,14 @@ import UIKit
             let content = runJS("RE.getHtml()")
             contentHTML = content
             updateHeight()
+            runJS("RE.enabledEditingItems();")
         }
         else if method.hasPrefix("updateHeight") {
             updateHeight()
         }
         else if method.hasPrefix("focus") {
             delegate?.richEditorTookFocus?(self)
+            runJS("RE.enabledEditingItems();")
         }
         else if method.hasPrefix("blur") {
             delegate?.richEditorLostFocus?(self)
